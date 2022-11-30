@@ -1,4 +1,5 @@
 from typing import Any, Dict, Optional
+from ai_economist.foundation.env_wrapper import recursive_obs_dict_to_spaces_dict
 import dm_env
 from dm_env import specs
 import gym
@@ -20,17 +21,70 @@ class GymWrapper(dm_env.Environment):
     self._last_info = None
 
     # Convert action and observation specs.
-    obs_space = self._environment.observation_space
-    act_space = self._environment.action_space
+    # Add observation space to the env
+    # --------------------------------
+    # Note: when the collated agent "a" is present, add obs keys
+    # for each individual agent to the env
+    # and remove the collated agent "a" from the observation
+    obs = self.obs_at_reset()
+    obs_space = spaces.Dict(recursive_obs_dict_to_spaces_dict(obs))
+
+    # Add action space to the env
+    # ---------------------------
+    act_space = {}
+    for agent_id in range(len(self._environment.world.agents)):
+        if self._environment.world.agents[agent_id].multi_action_mode:
+            act_space[str([agent_id])] = spaces.MultiDiscrete(
+                self._environment.get_agent(str(agent_id)).action_spaces
+            )
+        else:
+            act_space[str(agent_id)] = spaces.Discrete(
+                self._environment.get_agent(str(agent_id)).action_spaces
+            )
+        act_space[str(agent_id)].dtype = np.int32
+
+    if self._environment.world.planner.multi_action_mode:
+        act_space["p"] = spaces.MultiDiscrete(
+            self._environment.get_agent("p").action_spaces
+        )
+    else:
+        act_space["p"] = spaces.Discrete(self._environment.get_agent("p").action_spaces)
+    act_space["p"].dtype = np.int32
+
+    # Ensure the observation and action spaces share the same keys
+    assert set(obs_space.keys()) == set(
+        act_space.keys()
+    )
+    act_space = spaces.Dict(act_space)
+
     self._observation_spec = gym_convert_to_spec(obs_space, name='observation')
     self._action_spec = gym_convert_to_spec(act_space, name='action')
+
+  def obs_at_reset(self):
+        """
+        Calls the (Python) env to reset and return the initial state
+        """
+        obs = self._environment.reset()
+        obs = self._reformat_obs(obs)
+        return obs
+
+  def _reformat_obs(self, obs):
+      if "a" in obs:
+          # This means the env uses collated obs.
+          # Set each individual agent as obs keys for processing with WarpDrive.
+          for agent_id in range(self._environment.n_agents):
+              obs[str(agent_id)] = {}
+              for key in obs["a"].keys():
+                  obs[str(agent_id)][key] = obs["a"][key][..., agent_id]
+          del obs["a"]  # remove the key "a"
+      return obs
 
   def reset(self) -> dm_env.TimeStep:
     """Resets the episode."""
     self._reset_next_step = False
-    observation, info = self._environment.reset()
+    observation = self._environment.reset()
+    
     # Reset the diagnostic information.
-    self._last_info = info
     return dm_env.restart(observation)
 
   def step(self, action) -> dm_env.TimeStep:
@@ -38,22 +92,11 @@ class GymWrapper(dm_env.Environment):
     if self._reset_next_step:
       return self.reset()
 
-    observation, reward, done, truncated, info = self._environment.step(action)
+    observation, reward, done, info = self._environment.step(action)
     self._reset_next_step = done
     self._last_info = info
 
-    # Convert the type of the reward based on the spec, respecting the scalar or
-    # array property.
-    reward = tree.map_structure(
-        lambda x, t: (  # pylint: disable=g-long-lambda
-            t.dtype.type(x)
-            if np.isscalar(x) else np.asarray(x, dtype=t.dtype)),
-        reward,
-        self.reward_spec())
-
     
-    if truncated:
-        return dm_env.truncation(reward, observation)
     if done:
         return dm_env.termination(reward, observation)
     return dm_env.transition(reward, observation)
@@ -99,6 +142,7 @@ def gym_convert_to_spec(space: gym.Space,
     A dm_env spec or nested structure of specs, corresponding to the input
     space.
   """
+  
   if isinstance(space, spaces.Discrete):
     return specs.DiscreteArray(num_values=space.n, dtype=space.dtype, name=name)
 

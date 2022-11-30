@@ -1,40 +1,41 @@
 import jax
-import jax.numpy as jnp
 import haiku as hk
-import gym
 import numpy as np
-
 import matplotlib.pyplot as plt
+from ai_economist import foundation
 
-from rl.replay_buffer import ReplayBuffer
+
+from config import basic_env_config
+from rl.replay_buffer import ReplayBuffer, stack_trees
 from rl.wrapper import GymWrapper
 from rl.agent import DQN_Agent
 import matplotlib.pyplot as plt
 
-def eval_agent(agent, environment, params, actor_state, eval_episodes, rng):
-        
+def eval_agent(agent : DQN_Agent, environment, params, eval_episodes, rng_key):
+    agent_indices = [f"{i}" for i in range(agent._n_agents)]
+
     episode_returns = []
     for eval_episode in range(eval_episodes):
-        returns = 0
+        returns = {a_idx : 0 for a_idx in agent_indices}
         # Prepare agent, environment and accumulator for a new episode.
         timestep = environment.reset()
         
         while not timestep.last():
             
             # Get Action
-            actor_output, actor_state = agent.actor_step(
-                params, timestep, actor_state, rng, eval=True
-            )
+            actions = {a_idx: agent.select_action(params, rng_key, timestep.observation[a_idx]["flat"], timestep.observation[a_idx]['action_mask']) for a_idx in agent_indices}
 
             # Agent-environment interaction.
-            action = int(actor_output.actions)
-            timestep = environment.step(action)
+            timestep = environment.step(actions)
             # env.render()
-            returns += timestep.reward
+            returns = {a_idx : timestep.reward[a_idx] + returns[a_idx] for a_idx in agent_indices}
         
         episode_returns.append(returns)
+    
+    episode_returns = stack_trees(episode_returns)
+    rewards = jax.tree_map(lambda x : np.mean(x), episode_returns)
 
-    return np.mean(episode_returns)
+    return np.mean([reward for reward in rewards.values()])
 
 def run_loop(
     agent: DQN_Agent, environment, seed, replay_buffer, batch_size, train_episodes, eval_period, eval_episodes
@@ -43,7 +44,7 @@ def run_loop(
     rng = hk.PRNGSequence(jax.random.PRNGKey(seed))
     params = agent.initial_params(next(rng))
     learner_state = agent.initial_learner_state(params)
-    actor_state = agent.initial_actor_state()
+    agent_indices = [f"{i}" for i in range(agent._n_agents)]
 
     print(f"Training agent for {train_episodes} episodes")
     
@@ -57,17 +58,14 @@ def run_loop(
 
         while not timestep.last():
             
-            # Get Action
-            actor_output, actor_state = agent.actor_step(
-                params, timestep, actor_state, next(rng)
-            )
+            # Get Actions
+            actions = {a_idx: agent.select_action(params, next(rng), timestep.observation[a_idx]["flat"], timestep.observation[a_idx]['action_mask']) for a_idx in agent_indices}
 
             # Agent-environment interaction.
-            action = int(actor_output.actions)
-            timestep = environment.step(action)
-
+            timestep = environment.step(actions)
+            
             # Accumulate experience.
-            replay_buffer.push(timestep, action)
+            replay_buffer.push(timestep, actions)
 
             # Learning.
             if replay_buffer.is_ready(batch_size):
@@ -76,20 +74,26 @@ def run_loop(
                 )
 
         if (train_episode+1)%eval_period==0:
-            average_eval_reward = eval_agent(agent, environment, params, actor_state, eval_episodes, next(rng))
+            average_eval_reward = eval_agent(agent, environment, params, eval_episodes, next(rng))
+            print("Eval Reward:",average_eval_reward)
             evaluation_scores.append(average_eval_reward)
     
-    average_eval_reward = eval_agent(agent,environment,params, actor_state, eval_episodes, next(rng))
+    average_eval_reward = eval_agent(agent,environment,params, eval_episodes, next(rng))
     evaluation_scores.append(average_eval_reward)
+
     return evaluation_scores
     
    
 
 if __name__ == "__main__":
     
-    env = GymWrapper(gym.make("CartPole-v1"))
+    env = foundation.make_env_instance(**basic_env_config)
     
-    replay_buffer = ReplayBuffer(capacity=50000)
+   
+
+    env = GymWrapper(env)
+    
+    replay_buffer = ReplayBuffer(capacity=100000)
 
     dqn_agent = DQN_Agent(
     observation_spec=env.observation_spec(),
@@ -98,19 +102,21 @@ if __name__ == "__main__":
     epsilon=0.1,
     learning_rate=1e-3,
     discount_gamma=0.99,
-    target_update_period=50)
+    target_update_period=100,
+    n_agents = env._environment.n_agents)
 
     run_data = run_loop(
         agent=dqn_agent,
         environment=env,
         seed=42,
         replay_buffer=replay_buffer,
-        batch_size=64,
+        batch_size=128,
         train_episodes=500,
-        eval_period = 100,
-        eval_episodes = 100
+        eval_period = 50,
+        eval_episodes = 100,
     )
-
-    plt.plot(np.arange(len(run_data)),np.array(run_data))
-    plt.show()
+    
+    print(run_data)
+    # plt.plot(np.arange(len(run_data)),np.array(run_data))
+    # plt.show()
 

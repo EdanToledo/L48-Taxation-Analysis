@@ -2,14 +2,22 @@ import chex
 import numpy as np
 import collections
 import random
+from typing import Any
+
+import jax 
+import jax.numpy as jnp 
+
+def stack_trees(trees) -> Any:
+    """_description_"""
+    return jax.tree_util.tree_map(lambda *leaves: jnp.stack(leaves), *trees)
 
 @chex.dataclass
 class Transition:
-    obs_tm1 : chex.Array
-    a_tm1 : chex.Array
-    r_t : chex.Numeric
-    discount : chex.Numeric
-    obs_t : chex.Array
+    obs_tm1 : Any 
+    a_tm1 : Any
+    r_t : Any
+    discount : Any
+    obs_t : Any
 
 class ReplayBuffer(object):
   """A simple Python replay buffer."""
@@ -33,8 +41,9 @@ class ReplayBuffer(object):
   def sample(self, batch_size):
     obs_tm1, a_tm1, r_t, discount_t, obs_t = zip(
         *random.sample(self.buffer, batch_size))
-    return (np.stack(obs_tm1), np.asarray(a_tm1), np.asarray(r_t),
-            np.asarray(discount_t), np.stack(obs_t))
+    
+    return (stack_trees(obs_tm1), stack_trees(a_tm1), stack_trees(r_t),
+            stack_trees(discount_t), stack_trees(obs_t))
 
   def is_ready(self, batch_size):
     return batch_size <= len(self.buffer)
