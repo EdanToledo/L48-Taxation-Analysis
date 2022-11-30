@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import plotting
+from IPython import display
 
 def income_earned(labor, skill):
     """Income is amount of work (labor) times skill."""
@@ -30,6 +32,12 @@ def plot_utility_curve(skill):
     ax.plot(labor_array, utility_array, label="Skill = {}".format(skill))
     ax.plot(labor_array[np.argmax(utility_array)], np.max(utility_array), 'k*', markersize=10)
 
+def do_plot(env, ax, fig):
+    """Plots world state during episode sampling."""
+    plotting.plot_env_state(env, ax)
+    ax.set_aspect('equal')
+    display.display(fig)
+    display.clear_output(wait=True)
 
 def sample_random_action(agent, mask):
     """Sample random UNMASKED action(s) for agent."""

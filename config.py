@@ -12,11 +12,25 @@ basic_env_config = {
     # The order in which components reset, step, and generate obs follows their listed order below.
     'components': [
         # (1) Building houses
-        ('Build', {'skill_dist': "pareto", 'payment_max_skill_multiplier': 3}),
+        ('Build', {
+            'skill_dist':                   'pareto', 
+            'payment_max_skill_multiplier': 3,
+            'build_labor':                  10,
+            'payment':                      10
+        }),
         # (2) Trading collectible resources
-        ('ContinuousDoubleAuction', {'max_num_orders': 5}),
+        ('ContinuousDoubleAuction', {
+            'max_bid_ask':    10,
+            'order_labor':    0.25,
+            'max_num_orders': 5,
+            'order_duration': 50
+        }),
         # (3) Movement and resource collection
-        ('Gather', {}),
+        ('Gather', {
+            'move_labor':    1,
+            'collect_labor': 1,
+            'skill_dist':    'pareto'
+        }),
     ],
     
     # ===== SCENARIO CLASS ARGUMENTS =====

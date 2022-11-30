@@ -50,6 +50,7 @@ class DQN_Agent:
         self._discount_gamma = discount_gamma
         self._target_update_period = target_update_period
         self._n_agents = n_agents
+        self.agent_indices = [f"{i}" for i in range(self._n_agents)]
 
         # Neural net and optimiser.
         # TODO (edan) : make generic 
@@ -76,21 +77,19 @@ class DQN_Agent:
         return LearnerState(count=learner_count, opt_state=opt_state)
 
     def select_action(self, params, key, obs, mask, eval = False):
-        
-        actor_output = self.actor_step(params, obs, key, eval)
-        masked_q_values = jnp.where(mask,actor_output.q_values,jnp.finfo(actor_output.q_values.dtype).min)
-        actor_output = actor_output.replace(q_values = masked_q_values) 
+        actor_output = self.actor_step(params, obs, key, mask,  eval)
         return actor_output.actions
 
 
-    def actor_step(self, params, observation, key, eval=False):
+    def actor_step(self, params, observation, key, mask, eval=False):
         q_values = self._network.apply(params.online, observation)
-        train_action = rlax.epsilon_greedy(self._epsilon).sample(key, q_values)
-        eval_action = rlax.greedy().sample(key, q_values)
+        masked_q_values = jnp.where(mask, q_values, jnp.finfo(q_values.dtype).min)
+        train_action = rlax.epsilon_greedy(self._epsilon).sample(key, masked_q_values)
+        eval_action = rlax.greedy().sample(key, masked_q_values)
 
         action = jax.lax.select(eval, eval_action, train_action)
 
-        return ActorOutput(actions=action, q_values=q_values)
+        return ActorOutput(actions=action, q_values=masked_q_values)
 
     def learner_step(self, params, data, learner_state):
         target_params = optax.periodic_update(
@@ -99,7 +98,7 @@ class DQN_Agent:
         obs_tm1, a_tm1, r_t, discount_t, obs_t = data
         for i in range(self._n_agents):
             
-            dloss_dtheta = jax.grad(self._loss)(params.online, target_params, obs_tm1[f"{i}"]["flat"], a_tm1[f"{i}"], r_t[f"{i}"], discount_t, obs_t[f"{i}"]["flat"])
+            loss, dloss_dtheta = jax.value_and_grad(self._loss)(params.online, target_params, obs_tm1[f"{i}"]["flat"], a_tm1[f"{i}"], r_t[f"{i}"], discount_t, obs_t[f"{i}"]["flat"])
 
             updates, opt_state = self._optimizer.update(
                 dloss_dtheta, learner_state.opt_state
@@ -111,7 +110,7 @@ class DQN_Agent:
 
             params = Params(online=online_params, target=target_params)
 
-        return params, learner_state
+        return params, learner_state, loss
 
     def _loss(self, params, target_params, obs_tm1, a_tm1, r_t, discount_t, obs_t):
         q_tm1 = self._network.apply(params, obs_tm1)

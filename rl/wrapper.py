@@ -79,18 +79,18 @@ class GymWrapper(dm_env.Environment):
           del obs["a"]  # remove the key "a"
       return obs
 
-  def reset(self) -> dm_env.TimeStep:
+  def reset(self, force_dense_logging = False) -> dm_env.TimeStep:
     """Resets the episode."""
     self._reset_next_step = False
-    observation = self._environment.reset()
+    observation = self._environment.reset(force_dense_logging=force_dense_logging)
     
     # Reset the diagnostic information.
     return dm_env.restart(observation)
 
   def step(self, action) -> dm_env.TimeStep:
     """Steps the environment."""
-    if self._reset_next_step:
-      return self.reset()
+    # if self._reset_next_step:
+    #   return self.reset()
 
     observation, reward, done, info = self._environment.step(action)
     self._reset_next_step = done
