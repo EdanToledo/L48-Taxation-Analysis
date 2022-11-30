@@ -84,15 +84,15 @@ def plot_map(maps, locs, ax=None, cmap_order=None):
 
 
 def plot_env_state(env, ax=None, remap_key=None):
-    maps = env._environment.world.maps
-    locs = [agent.loc for agent in env._environment.world.agents]
+    maps = env.world.maps
+    locs = [agent.loc for agent in env.world.agents]
 
     if remap_key is None:
         cmap_order = None
     else:
         assert isinstance(remap_key, str)
         cmap_order = np.argsort(
-            [agent.state[remap_key] for agent in env._environment.world.agents]
+            [agent.state[remap_key] for agent in env.world.agents]
         ).tolist()
 
     plot_map(maps, locs, ax, cmap_order)
