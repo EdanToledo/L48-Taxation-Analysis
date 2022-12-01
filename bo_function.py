@@ -9,10 +9,7 @@ import sys
 from ray.rllib.agents.ppo import PPOTrainer
 import yaml
 
-ray.init(log_to_driver=False)
-logging.basicConfig(stream=sys.stdout, format="%(asctime)s %(message)s")
-logger = logging.getLogger("main")
-logger.setLevel(logging.DEBUG)
+
 
 def build_trainer(run_configuration, government_policy=None):
     """Finalize the trainer config by combining the sub-configs."""
@@ -102,8 +99,6 @@ def load_config(run_dir):
 
 def economic_sim_func_eval(run_dir, run_config):
     
-    
-    
 
     # Create a trainer object
     trainer = build_trainer(run_config)
@@ -147,19 +142,26 @@ def economic_sim_func_eval(run_dir, run_config):
         # if curr_iter == 1 or result["episodes_this_iter"] > 0:
         #     logger.info(pretty_print(result))
 
-        print("agent reward mean:",result["policy_reward_mean"]["a"])
-        print("government reward mean:",result["policy_reward_mean"]["p"])
-
+        if result["policy_reward_mean"]:
+            print("agent reward mean:", result["policy_reward_mean"]["a"])
+            print("government reward mean:", result["policy_reward_mean"]["p"])
+            print("episode reward mean:", result["episode_reward_mean"])
         # === Dense logging ===
         maybe_store_dense_log(trainer, result, dense_log_frequency, dense_log_dir)
 
 
-    ray.shutdown()  # shutdown Ray after use
-
+    
 
 
 if __name__ == "__main__":
 
+    ray.init(log_to_driver=False)
+    logging.basicConfig(stream=sys.stdout, format="%(asctime)s %(message)s")
+    logger = logging.getLogger("main")
+    logger.setLevel(logging.DEBUG)
+
+
     run_dir = "./rllib_code/phase1"
     config = load_config(run_dir)
     economic_sim_func_eval(run_dir, config)
+    ray.shutdown()  # shutdown Ray after use
