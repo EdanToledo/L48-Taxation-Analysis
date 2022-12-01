@@ -51,7 +51,7 @@ env:
 general:
   ckpt_frequency_steps: 750000
   cpus: 4
-  episodes: 25000
+  episodes: 50
   gpus: 0
   restore_tf_weights_agents: ''
   restore_tf_weights_planner: ''
@@ -109,7 +109,7 @@ trainer:
   metrics_smoothing_episodes: null
   multiagent: null
   no_done_at_end: false
-  num_envs_per_worker: 2
+  num_envs_per_worker: 4
   num_gpus: 0
   num_gpus_per_worker: 0
   num_sgd_iter: 1

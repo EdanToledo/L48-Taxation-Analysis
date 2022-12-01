@@ -16,6 +16,7 @@ from ray.rllib.models.tf.recurrent_tf_modelv2 import (
 from ray.rllib.models.tf.tf_modelv2 import TFModelV2
 from ray.rllib.utils import try_import_tf
 from tensorflow import keras
+from ray.rllib.policy.policy import Policy
 
 # Disable TF INFO, WARNING, and ERROR messages
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -433,3 +434,41 @@ class RandomAction(TFModelV2):
 
 
 ModelCatalog.register_custom_model(RandomAction.custom_name, RandomAction)
+
+
+def create_government_policy(government_decision_variables):
+    
+    class BigBrother(Policy):
+        """Play the move that would beat the last move of the opponent."""
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+
+            self._government_decision_variables = government_decision_variables
+
+            
+        def compute_actions(
+            self,
+            obs_batch,
+            state_batches=None,
+            prev_action_batch=None,
+            prev_reward_batch=None,
+            info_batch=None,
+            episodes=None,
+            **kwargs
+        ):
+            
+            # RETURN ACTIONS
+            return 0
+
+        def learn_on_batch(self, samples):
+            pass
+
+        def get_weights(self):
+            pass
+
+        def set_weights(self, weights):
+            pass
+
+
+    ModelCatalog.register_custom_model(RandomAction.custom_name, RandomAction)
