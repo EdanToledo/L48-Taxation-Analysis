@@ -11,7 +11,7 @@ import yaml
 
 
 
-def build_trainer(run_configuration, government_policy=None):
+def build_trainer(run_configuration):
     """Finalize the trainer config by combining the sub-configs."""
     trainer_config = run_configuration.get("trainer")
 
@@ -99,13 +99,13 @@ def load_config(run_dir):
 
 def economic_sim_func_eval(run_dir, run_config):
     
-
-    # Create a trainer object
+    # Creates a trainer object using the new run configuration we feed it. Essentially, what we can do is use the GP to change the parameters in the config and then run this to evaluate it.
     trainer = build_trainer(run_config)
 
     # Set up directories for logging and saving. Restore if this has already been
     # done (indicating that we're restarting a crashed run). Or, if appropriate,
-    # load in starting model weights for the agent and/or planner.
+    # load in starting model weights for the agent and/or planner. 
+    # This is used to load in the free market agent weights when specified.
     (
         dense_log_dir,
         ckpt_dir,
@@ -130,6 +130,7 @@ def economic_sim_func_eval(run_dir, run_config):
         global_step = result["timesteps_total"]
         curr_iter = result["training_iteration"]
 
+        # We probably dont need to log this stuff
         # logger.info(
         #     "Iter %d: steps this-iter %d total %d -> %d/%d episodes done",
         #     curr_iter,
@@ -138,7 +139,6 @@ def economic_sim_func_eval(run_dir, run_config):
         #     num_parallel_episodes_done,
         #     run_config["general"]["episodes"],
         # )
-
         # if curr_iter == 1 or result["episodes_this_iter"] > 0:
         #     logger.info(pretty_print(result))
 
@@ -146,9 +146,14 @@ def economic_sim_func_eval(run_dir, run_config):
             print("agent reward mean:", result["policy_reward_mean"]["a"])
             print("government reward mean:", result["policy_reward_mean"]["p"])
             print("episode reward mean:", result["episode_reward_mean"])
+        
+        
         # === Dense logging ===
-        maybe_store_dense_log(trainer, result, dense_log_frequency, dense_log_dir)
+        # maybe_store_dense_log(trainer, result, dense_log_frequency, dense_log_dir)
 
+    return result["policy_reward_mean"]["p"]
+
+        
 
     
 
