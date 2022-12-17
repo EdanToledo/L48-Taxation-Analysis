@@ -18,7 +18,7 @@ from rllib_code.env_wrapper import RLlibEnvWrapper
 from ray.rllib.agents.ppo import PPOTrainer
 from ray.tune.logger import NoopLogger, pretty_print
 
-# ray.init(log_to_driver=False)
+ray.init(log_to_driver=False)
 
 logging.basicConfig(stream=sys.stdout, format="%(asctime)s %(message)s")
 logger = logging.getLogger("main")
