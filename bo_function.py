@@ -160,7 +160,7 @@ def economic_sim_func_eval(run_dir, run_config):
 
 if __name__ == "__main__":
 
-    ray.init(log_to_driver=False)
+    ray.init(log_to_driver=False, include_webui=False)
     logging.basicConfig(stream=sys.stdout, format="%(asctime)s %(message)s")
     logger = logging.getLogger("main")
     logger.setLevel(logging.DEBUG)
