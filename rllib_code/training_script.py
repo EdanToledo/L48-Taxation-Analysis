@@ -29,7 +29,7 @@ logger.setLevel(logging.DEBUG)
 
 def custom_log_creator(custom_path, custom_str):
 
-    timestr = datetime.today().strftime("%Y-%m-%d_%H-%M-%S")
+    timestr = datetime.datetime.today().strftime("%Y-%m-%d_%H-%M-%S")
     logdir_prefix = "{}_{}".format(custom_str, timestr)
 
     def logger_creator(config):
