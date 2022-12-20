@@ -2,3 +2,4 @@ ray[rllib]==0.8.4
 tensorflow
 git+https://github.com/salesforce/ai-economist.git@master
 gym==0.21
+gpyopt
