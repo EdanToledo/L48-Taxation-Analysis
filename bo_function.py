@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import yaml
+import pickle
 
 from ray.rllib.agents.ppo import PPOTrainer
 from ray.tune.logger import NoopLogger, pretty_print
@@ -206,13 +207,13 @@ def optimise_brackets(n_brackets):
         },
     ]
 
-    opt = BayesianOptimization(f=f, domain=domain)
+    opt = BayesianOptimization(f=f, domain=domain, maximize=True)
     opt.run_optimization(max_iter=30, max_time=3600)
 
     # Compute the results of this
     ins, outs = opt.get_evaluations()[0], opt.get_evaluations()[1]
     state_dict[n_brackets] = [ins, outs]
-    result = np.min(outs)
+    result = np.max(outs)
     return result
 
 
@@ -230,8 +231,8 @@ def bayesian_optimisation():
             "domain": tuple(i for i in range(1, 101)),
         }
     ]
-    opt = BayesianOptimization(f=optimise_brackets, domain=domain)
-    opt.run_optimization(max_iter=11)
+    opt = BayesianOptimization(f=optimise_brackets, domain=domain, maximize=True)
+    opt.run_optimization(max_iter=10, max_time=int(3600*11.5))
 
     # Compute the results of this
     return opt
@@ -246,6 +247,10 @@ if __name__ == "__main__":
 
     # Perform BO
     opt = bayesian_optimisation()
+    
+
+    with open('statedict.pickle', 'wb') as handle:
+        pickle.dump(state_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     print("Opt Eval:",opt.get_evaluations())
     opt.save_report("BO_Report.txt")
