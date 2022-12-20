@@ -8,12 +8,17 @@ import yaml
 from ray.rllib.agents.ppo import PPOTrainer
 from ray.tune.logger import NoopLogger, pretty_print
 from rllib_code.env_wrapper import RLlibEnvWrapper
-from rllib_code.training_script import custom_log_creator, maybe_store_dense_log, process_args, set_up_dirs_and_maybe_restore
+from rllib_code.training_script import (
+    custom_log_creator,
+    maybe_store_dense_log,
+    process_args,
+    set_up_dirs_and_maybe_restore,
+)
 
 from GPyOpt.methods import BayesianOptimization
 from ai_economist import foundation
 from ai_economist.foundation.base.base_env import BaseEnvironment, scenario_registry
-
+import numpy as np
 
 # State Dicts
 state_dict = {}
@@ -90,10 +95,13 @@ def build_trainer(run_configuration):
         return NoopLogger({}, "/tmp")
 
     ppo_trainer = PPOTrainer(
-        env=RLlibEnvWrapper, config=trainer_config, logger_creator=custom_log_creator("/home/et498/experiment_results","econ_exp")
+        env=RLlibEnvWrapper,
+        config=trainer_config,
+        logger_creator=custom_log_creator("./experiment_results", "econ_exp"),
     )
 
     return ppo_trainer
+
 
 def load_config(run_dir):
     config_path = os.path.join(run_dir, "config.yaml")
@@ -105,16 +113,17 @@ def load_config(run_dir):
 
     return run_configuration
 
+
 def economic_sim_func_eval(run_dir, run_config):
-    
-    # Creates a trainer object using the new run configuration we feed it. 
-    # Essentially, what we can do is use the GP to change the parameters in 
+
+    # Creates a trainer object using the new run configuration we feed it.
+    # Essentially, what we can do is use the GP to change the parameters in
     # the config and then run this to evaluate it.
     trainer = build_trainer(run_config)
 
     # Set up directories for logging and saving. Restore if this has already been
     # done (indicating that we're restarting a crashed run). Or, if appropriate,
-    # load in starting model weights for the agent and/or planner. 
+    # load in starting model weights for the agent and/or planner.
     # This is used to load in the free market agent weights when specified.
     (
         dense_log_dir,
@@ -140,31 +149,10 @@ def economic_sim_func_eval(run_dir, run_config):
         global_step = result["timesteps_total"]
         curr_iter = result["training_iteration"]
 
-        # We probably dont need to log this stuff
-        # logger.info(
-        #     "Iter %d: steps this-iter %d total %d -> %d/%d episodes done",
-        #     curr_iter,
-        #     result["timesteps_this_iter"],
-        #     global_step,
-        #     num_parallel_episodes_done,
-        #     run_config["general"]["episodes"],
-        # )
-        # if curr_iter == 1 or result["episodes_this_iter"] > 0:
-        #     logger.info(pretty_print(result))
-
-        if result["policy_reward_mean"]:
-            print("agent reward mean:", result["policy_reward_mean"]["a"])
-            print("government reward mean:", result["policy_reward_mean"]["p"])
-            print("episode reward mean:", result["episode_reward_mean"])
-        
-        
-        # === Dense logging ===
-        # maybe_store_dense_log(trainer, result, dense_log_frequency, dense_log_dir)
-
     return result["policy_reward_mean"]["p"]
 
 
-def f(x): 
+def f(x):
     """
     Wrapper around `economic_sim_func_eval` used as the target function to optimise
     with BO.
@@ -173,13 +161,21 @@ def f(x):
         x (np.array): The bracket intervals for the number of brackets specified by
                       the outer optimisation loop.
     """
-    run_dir = run_dir = "./rllib_code/phase1"
+    run_dir = run_dir = "./rllib_code/phase2"
     run_config = load_config(run_dir)
-    
+
+   
     # Change configuration to make tax brackets flexible
-    run_config['PeriodicBracketTax']['tax-model'] = "fixed-bracket-rates"
-    run_config['PeriodicBracketTax']['n_brackets'] = x.size
-    run_config['PeriodicBracketTax']['fixed_bracket_rates'] = x 
+    run_config["env"]["components"][-1]["PeriodicBracketTax"]["tax_model"] = "fixed-bracket-rates"
+    run_config["env"]["components"][-1]["PeriodicBracketTax"]["n_brackets"] = len(x[0][0:-1])
+    run_config["env"]["components"][-1]["PeriodicBracketTax"]["fixed_bracket_rates"] = list(x[0][0:-1])
+    if x[0][-1] == 0:
+        run_config["env"]["components"][-1]["PeriodicBracketTax"]["bracket_spacing"] = "linear"
+    else:
+        run_config["env"]["components"][-1]["PeriodicBracketTax"]["bracket_spacing"] = "log"
+
+    # We use 2000 from seeing free-market agents achieving this value
+    run_config["env"]["components"][-1]["PeriodicBracketTax"]["top_bracket_cutoff"] = 2000
 
     return economic_sim_func_eval(run_dir, run_config)
 
@@ -195,10 +191,24 @@ def optimise_brackets(n_brackets):
     # values for brackets would be realistic).
 
     # Performs a single BO
-    domain = [{'name': 'brackets', 'type': 'continuous', 'dimensionality': int(size), 'domain':(0, 10)}]
+    domain = [
+        {
+            "name": "bracket_rates",
+            "type": "continuous",
+            "dimensionality": int(n_brackets),
+            "domain": (0, 1),
+        },
+        {
+            "name": "bracket_cutoffs",
+            "type": "discrete",
+            "domain": (0, 1),
+            "dimensionality": 1,
+        },
+    ]
+
     opt = BayesianOptimization(f=f, domain=domain)
-    opt.run_optimization(max_iter=15)
-    
+    opt.run_optimization(max_iter=30, max_time=3600)
+
     # Compute the results of this
     ins, outs = opt.get_evaluations()[0], opt.get_evaluations()[1]
     state_dict[n_brackets] = [ins, outs]
@@ -212,12 +222,19 @@ def bayesian_optimisation():
     """
 
     # Optimise over the number of brackets – max taken to be 100.
-    domain = [{'name': 'size', 'type': 'discrete', 'dimensionality': 1, 'domain': tuple(i for i in range(1, 101))}]
+    domain = [
+        {
+            "name": "size",
+            "type": "discrete",
+            "dimensionality": 1,
+            "domain": tuple(i for i in range(1, 101)),
+        }
+    ]
     opt = BayesianOptimization(f=optimise_brackets, domain=domain)
-    opt.run_optimization(max_iter=15)
-    
+    opt.run_optimization(max_iter=11)
+
     # Compute the results of this
-    return opt.get_evaluations()
+    return opt
 
 
 if __name__ == "__main__":
@@ -228,7 +245,9 @@ if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
 
     # Perform BO
-    bayesian_optimisation()
-    
+    opt = bayesian_optimisation()
+
+    print("Opt Eval:",opt.get_evaluations())
+    opt.save_report("BO_Report.txt")
     # economic_sim_func_eval(run_dir, config)
     ray.shutdown()  # shutdown Ray after use
