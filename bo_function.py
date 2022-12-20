@@ -1,7 +1,7 @@
 import time
 from ray.tune.logger import NoopLogger, pretty_print
 from rllib_code.env_wrapper import RLlibEnvWrapper
-from rllib_code.training_script import maybe_store_dense_log, process_args, set_up_dirs_and_maybe_restore
+from rllib_code.training_script import custom_log_creator, maybe_store_dense_log, process_args, set_up_dirs_and_maybe_restore
 import ray
 import logging
 import os
@@ -82,7 +82,7 @@ def build_trainer(run_configuration):
         return NoopLogger({}, "/tmp")
 
     ppo_trainer = PPOTrainer(
-        env=RLlibEnvWrapper, config=trainer_config, logger_creator=logger_creator
+        env=RLlibEnvWrapper, config=trainer_config, logger_creator=custom_log_creator("/home/et498/experiment_results","econ_exp")
     )
 
     return ppo_trainer
