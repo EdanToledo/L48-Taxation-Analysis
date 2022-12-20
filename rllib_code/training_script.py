@@ -5,9 +5,11 @@
 # or https://opensource.org/licenses/BSD-3-Clause
 
 import argparse
+import datetime
 import logging
 import os
 import sys
+import tempfile
 import time
 
 import ray
@@ -16,7 +18,7 @@ import rllib_code.tf_models
 import yaml
 from rllib_code.env_wrapper import RLlibEnvWrapper
 from ray.rllib.agents.ppo import PPOTrainer
-from ray.tune.logger import NoopLogger, pretty_print
+from ray.tune.logger import NoopLogger, pretty_print, UnifiedLogger
 
 ray.init(log_to_driver=False, include_webui=False)
 
@@ -24,6 +26,20 @@ logging.basicConfig(stream=sys.stdout, format="%(asctime)s %(message)s")
 logger = logging.getLogger("main")
 logger.setLevel(logging.DEBUG)
 
+
+def custom_log_creator(custom_path, custom_str):
+
+    timestr = datetime.datetime.today().strftime("%Y-%m-%d_%H-%M-%S")
+    logdir_prefix = "{}_{}".format(custom_str, timestr)
+
+    def logger_creator(config):
+
+        if not os.path.exists(custom_path):
+            os.makedirs(custom_path)
+        logdir = tempfile.mkdtemp(prefix=logdir_prefix, dir=custom_path)
+        return UnifiedLogger(config, logdir, loggers=None)
+
+    return logger_creator
 
 def process_args():
     parser = argparse.ArgumentParser()
@@ -116,7 +132,7 @@ def build_trainer(run_configuration):
         return NoopLogger({}, "/tmp")
 
     ppo_trainer = PPOTrainer(
-        env=RLlibEnvWrapper, config=trainer_config, logger_creator=logger_creator
+        env=RLlibEnvWrapper, config=trainer_config, logger_creator=custom_log_creator("/home/et498/experiment_results","econ_exp")
     )
 
     return ppo_trainer
