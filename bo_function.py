@@ -98,7 +98,7 @@ def build_trainer(run_configuration):
     ppo_trainer = PPOTrainer(
         env=RLlibEnvWrapper,
         config=trainer_config,
-        logger_creator=custom_log_creator("./experiment_results", "econ_exp"),
+        logger_creator=custom_log_creator("./bo_loop/experiment_results", "econ_exp"),
     )
 
     return ppo_trainer
@@ -188,9 +188,6 @@ def optimise_brackets(n_brackets):
     """
     global state_dict
 
-    # TODO: Domain is currently arbitrary and needs to be experimentally determined (i.e. see what
-    # values for brackets would be realistic).
-
     # Performs a single BO
     domain = [
         {
@@ -208,34 +205,24 @@ def optimise_brackets(n_brackets):
     ]
 
     opt = BayesianOptimization(f=f, domain=domain, maximize=True)
-    opt.run_optimization(max_iter=30, max_time=3600)
+    opt.run_optimization(max_iter=40, max_time=3600*11, evaluations_file="./bo_evaluations.txt")
 
     # Compute the results of this
     ins, outs = opt.get_evaluations()[0], opt.get_evaluations()[1]
     state_dict[n_brackets] = [ins, outs]
     result = np.max(outs)
-    return result
+    return opt, result
 
 
-def bayesian_optimisation():
+def bayesian_optimisation(number_of_brackets):
     """
     Objective function we are trying to optimise.
     """
 
-    # Optimise over the number of brackets – max taken to be 100.
-    domain = [
-        {
-            "name": "size",
-            "type": "discrete",
-            "dimensionality": 1,
-            "domain": tuple(i for i in range(1, 101)),
-        }
-    ]
-    opt = BayesianOptimization(f=optimise_brackets, domain=domain, maximize=True)
-    opt.run_optimization(max_iter=10, max_time=int(3600*11.5))
-
+    opt, result = optimise_brackets(number_of_brackets)
+    
     # Compute the results of this
-    return opt
+    return opt, result
 
 
 if __name__ == "__main__":
@@ -245,12 +232,16 @@ if __name__ == "__main__":
     logger = logging.getLogger("main")
     logger.setLevel(logging.DEBUG)
 
+    number_of_brackets = 1
     # Perform BO
-    opt = bayesian_optimisation()
+    opt, result = bayesian_optimisation(number_of_brackets)
     
 
     with open('statedict.pickle', 'wb') as handle:
         pickle.dump(state_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    with open('bo_opt.pickle', 'wb') as handle:
+        pickle.dump(opt, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     print("Opt Eval:",opt.get_evaluations())
     opt.save_report("BO_Report.txt")

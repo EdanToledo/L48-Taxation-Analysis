@@ -20,7 +20,7 @@ from rllib_code.env_wrapper import RLlibEnvWrapper
 from ray.rllib.agents.ppo import PPOTrainer
 from ray.tune.logger import NoopLogger, pretty_print, UnifiedLogger
 
-# ray.init(log_to_driver=False, include_webui=False)
+ray.init(log_to_driver=False, include_webui=False)
 
 logging.basicConfig(stream=sys.stdout, format="%(asctime)s %(message)s")
 logger = logging.getLogger("main")
@@ -131,6 +131,7 @@ def build_trainer(run_configuration):
     def logger_creator(config):
         return NoopLogger({}, "/tmp")
 
+    # /home/et498/experiment_results
     ppo_trainer = PPOTrainer(
         env=RLlibEnvWrapper, config=trainer_config, logger_creator=custom_log_creator("/home/et498/experiment_results","econ_exp")
     )
